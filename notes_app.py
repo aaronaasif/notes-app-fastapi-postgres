@@ -235,8 +235,10 @@ PAGE = """<!doctype html>
   .edit:hover { background: var(--accent-soft); }
   .del { background: transparent; color: var(--danger); padding: 6px 10px; font-size: 14px; }
   .del:hover { background: var(--danger-bg); }
-  .cancel { background: transparent; color: var(--muted); border-color: var(--line); }
+  .cancel { background: transparent; color: var(--muted); border-size: 1px solid var(--line); }
   .cancel:hover { background: var(--bg); }
+  .logout { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px;}
+  .logout:hover { background: var(--accent-soft); }
   .actions { display: flex; gap: var(--s1); }
 
   /* note cards */
@@ -252,9 +254,15 @@ PAGE = """<!doctype html>
   .note.done { opacity: .65; border-left-color: var(--line); }   /* done note: quiet edge */
   .note.done h3 { text-decoration: line-through; color: var(--muted); }
 
+  /*messages and empty state */
   .msg { color: var(--danger); min-height: 20px; margin: 0; font-size: 14px; }
   .msg:empty { display: none; }          /* no empty gap when there is no message */
   .empty { color: var(--muted); text-align: center; padding: var(--s4) 0; }
+
+  /* top bar with title and user info */
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s3); }
+  .who-box { display: flex; align-items: center; gap: var(--s2); }
+  .topbar .sub { margin: 0; font-size: 14px; }
 
 </style>
 </head>
@@ -263,8 +271,15 @@ PAGE = """<!doctype html>
   
   <!-- The is notes page. It is a single-page app: the JavaScript below talks to the API above. -->
   <section class="sec-block" id="app" hidden>
-  <h1>Notes</h1>
-  <p class="sub">Signed in as <span id="who"></span></p>
+
+    <header class="topbar">
+    <h1>Notes</h1>
+    <div class="who-box">
+        <span class="sub">Signed in as <span id="who"></span></span>
+        <button type="button" class="logout" id="logout">Log Out</button>
+    </div>
+   </header>
+
   <p class="sub">Add a note, tick it when it is done.</p>
   
   <p class="sub" id="count"></p>
@@ -278,7 +293,7 @@ PAGE = """<!doctype html>
 
   <div id="list"></div>
 
-  <button class="submit" id="logout" type="button">Log Out</button>
+  <button class="logout" id="logout" type="button">Log Out</button>
 
   </section>
   
