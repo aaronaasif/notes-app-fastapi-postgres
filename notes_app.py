@@ -211,6 +211,7 @@ PAGE = """<!doctype html>
   .sub { color: var(--muted); margin: 0 0 var(--s3); }
   .sec-block { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
                padding: var(--s4); margin: 0 0 var(--s4); }
+  .auth-card { max-width: 400px; margin: 48px auto; }
 
   /* count pill */
   #count { display: inline-block; margin: 0 0 var(--s3); padding: 2px 10px; border-radius: 999px;
@@ -237,8 +238,9 @@ PAGE = """<!doctype html>
   .del:hover { background: var(--danger-bg); }
   .cancel { background: transparent; color: var(--muted); border-size: 1px solid var(--line); }
   .cancel:hover { background: var(--bg); }
-  .logout { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px;}
-  .logout:hover { background: var(--accent-soft); }
+  .logout, .signup { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px;}
+  .logout:hover, .signup:hover {
+    background: var(--accent-soft); }
   .actions { display: flex; gap: var(--s1); }
 
   /* note cards */
@@ -263,6 +265,9 @@ PAGE = """<!doctype html>
   .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s3); }
   .who-box { display: flex; align-items: center; gap: var(--s2); }
   .topbar .sub { margin: 0; font-size: 14px; }
+
+  /*Setting the width of the login form button to 100 percent for better UX on mobile devices*/
+  #auth-form button { width: 100%; padding: 12px 16px; font-size: 16px; }
 
 </style>
 </head>
@@ -298,16 +303,17 @@ PAGE = """<!doctype html>
   </section>
   
   <!--This is Login Auth Card -->
-  <section class="sec-block" id="auth" hidden>
-  <h1>Login Page</h1>
-  <form id="auth-form">
-    <input type="email" id="email" placeholder="enter your email address" required maxlength="120">
-    <input type="password" id="password" autocomplete="current-password" placeholder="enter your password" required maxlength="50">
-    <button class="submit" id="login" type="submit">Log In</button>
-    <button class="submit" id="signups" type="button">Sign Up</button>
-    <p class="msg" id="msg-error"></p>
-  </form>
-  </section>
+  <section class="sec-block auth-card" id="auth" hidden>
+    <h1>Notes</h1>
+    <p class="sub">Log in or create an account.</p>
+    <form id="auth-form">
+        <input type="email" id="email" placeholder="enter your email address" required maxlength="120">
+        <input type="password" id="password" autocomplete="current-password" placeholder="enter your password" required maxlength="50">
+        <button class="submit" id="login" type="submit">Log In</button>
+        <button class="signup" id="signups" type="button">Sign Up</button>
+        <p class="msg" id="msg-error"></p>
+    </form>
+</section>
 
 </main>
 
