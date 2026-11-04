@@ -238,7 +238,7 @@ PAGE = """<!doctype html>
   .del:hover { background: var(--danger-bg); }
   .cancel { background: transparent; color: var(--muted); border-size: 1px solid var(--line); }
   .cancel:hover { background: var(--bg); }
-  .logout, .signup { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px;}
+  .logout, .signup { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px; white-space: nowrap; }
   .logout:hover, .signup:hover {
     background: var(--accent-soft); }
   .actions { display: flex; gap: var(--s1); }
@@ -262,8 +262,8 @@ PAGE = """<!doctype html>
   .empty { color: var(--muted); text-align: center; padding: var(--s4) 0; }
 
   /* top bar with title and user info */
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s3); }
-  .who-box { display: flex; align-items: center; gap: var(--s2); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s3); flex-wrap: wrap; gap: var(--s2); }
+  .who-box { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
   .topbar .sub { margin: 0; font-size: 14px; }
 
   /*Setting the width of the login form button to 100 percent for better UX on mobile devices*/
@@ -297,8 +297,6 @@ PAGE = """<!doctype html>
   </form>
 
   <div id="list"></div>
-
-  <button class="logout" id="logout" type="button">Log Out</button>
 
   </section>
   
