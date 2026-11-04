@@ -247,7 +247,7 @@ PAGE = """<!doctype html>
   .note { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--s2); align-items: start;
           background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
           padding: var(--s3); margin-bottom: var(--s2); transition: border-color .15s, box-shadow .15s; }
-  .note:hover { border-color: #d3cdc1; box-shadow: 0 2px 10px rgba(21, 23, 28, .06); }
+  .note:hover { box-shadow: 0 2px 10px rgba(21, 23, 28, .06); }
   .note.editing { grid-template-columns: 1fr; }
   .note input[type=checkbox] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); }
   .note h3 { margin: 0; font-size: 17px; line-height: 1.35; }
@@ -255,6 +255,13 @@ PAGE = """<!doctype html>
   .note { border-left: 4px solid var(--accent); }                /* active note: accent edge */
   .note.done { opacity: .65; border-left-color: var(--line); }   /* done note: quiet edge */
   .note.done h3 { text-decoration: line-through; color: var(--muted); }
+  
+  @media (max-width: 480px) {
+    .note { grid-template-columns: auto auto 1fr; }
+    .note > :nth-child(2) { grid-column: 2 / -1; }          /* text spans columns 2 and 3 */
+    .note .edit { grid-column: 2; grid-row: 2; }            /* second row, under the text */
+    .note .del  { grid-column: 3; grid-row: 2; justify-self: start; }
+  }
 
   /*messages and empty state */
   .msg { color: var(--danger); min-height: 20px; margin: 0; font-size: 14px; }
