@@ -33,8 +33,6 @@ FastAPI also builds an interactive test page for the API automatically, so every
 | POST | `/login` | Sign in with an email and password |
 | GET | `/me` | Verify the current logged in user |
 
-Note: All calls to /notes now need a bearer token
-
 Example body for `POST` and `PUT` on `/notes`:
 
 ```json
@@ -61,9 +59,13 @@ The response contains only the user's `id` and `email`. The password hash is nev
 ```bash
 python -m venv .venv
 .venv\Scripts\activate          # Windows (Mac/Linux: source .venv/bin/activate)
-python -m pip install fastapi uvicorn "pwdlib[argon2]"
+python -m pip install fastapi uvicorn "pwdlib[argon2]" pyjwt python-multipart
 uvicorn notes_app:app --reload
 ```
+Set a long random secret for the login tokens (PowerShell):
+
+```powershell
+$env:NOTES_SECRET = "a-long-random-string"
 
 Then open:
 
@@ -78,6 +80,7 @@ Run the command from the project folder. The database file always sits next to `
 - After Login, the app shows each person only their own notes.
 - If you change the structure of a table that already exists while practicing, delete `notes.db` and restart so a new table is created.
 - The web page’s login form is the next step, because the page can’t call the protected routes yet.
+- All calls to /notes now need a bearer token
 
 ## Roadmap
 
