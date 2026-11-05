@@ -93,6 +93,7 @@ Run the command from the project folder. The database file always sits next to `
 - [x] Each user sees only their own notes
 - [x] The page now has a login and sign-up screen
 - [ ] Deploy online with a hosted database
+
 ## Screenshots
 
 ![Login screen iPhone](screenshots/login_iphone.jpg)
