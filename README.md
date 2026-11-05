@@ -32,7 +32,6 @@ FastAPI also builds an interactive test page for the API automatically, so every
 | POST | `/users` | Sign up with an email and password |
 | POST | `/login` | Sign in with an email and password |
 | GET | `/me` | Verify the current logged in user |
-| GET | `/me` | Verify the current logged in user |
 
 Note: All calls to /notes now need a bearer token
 
