@@ -89,13 +89,12 @@ Run the command from the project folder. The database file always sits next to `
 - [x] Each user sees only their own notes
 - [x] The page now has a login and sign-up screen
 - [ ] Deploy online with a hosted database
-   ## Screenshots
+## Screenshots
 
-   ![Login screen iPhone](screenshots/login_iphone.png)
-   ![Notes page iPhone](screenshots/notes_iphone.png)
-   ![Login screen Android](screenshots/login_android.png)
-   ![Notes page Android](screenshots/notes_androaid.png)
-
+![Login screen iPhone](screenshots/login_iphone.jpg)
+![Notes page iPhone](screenshots/notes_iphone.jpg)
+![Login screen Android](screenshots/login_android.jpg)
+![Notes page Android](screenshots/notes_android.jpg)
 
 ## Built with
 
