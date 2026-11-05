@@ -67,6 +67,12 @@ Set a long random secret for the login tokens (PowerShell):
 ```powershell
 $env:NOTES_SECRET = "a-long-random-string"
 
+Set a long random secret for the login tokens (PowerShell):
+
+```powershell
+$env:NOTES_SECRET = "a-long-random-string"
+```
+
 Then open:
 
 - http://127.0.0.1:8000/ for the notes page
@@ -91,6 +97,7 @@ Run the command from the project folder. The database file always sits next to `
 - [x] Each user sees only their own notes
 - [x] The page now has a login and sign-up screen
 - [ ] Deploy online with a hosted database
+
 ## Screenshots
 
 ![Login screen iPhone](screenshots/login_iphone.jpg)
