@@ -1,4 +1,4 @@
-# Notes App (FastAPI + SQLite)
+﻿# Notes App (FastAPI + SQLite)
 
 A small full-stack notes app built with Python and FastAPI. It has a web page for adding, ticking off and deleting notes, a JSON API behind it, and a SQLite database so notes survive restarts. User sign-up with safely hashed passwords is in place, and login is being added step by step.
 
@@ -13,6 +13,10 @@ FastAPI also builds an interactive test page for the API automatically, so every
 - User sign-up: passwords are hashed with Argon2 and never stored as plain text
 - Input checks: a note without a title is rejected, a duplicate email returns `409 Conflict`
 - Proper errors: asking for a missing note returns `404 Not Found`
+- User Login: The app provides multi user login to Notes app
+- Per-User Notes: The app just shows the notes added by the logged in user
+- Edit in-place: Each user can edit his notes
+- Responsive Design: The app has built in feature to adjust the display according to the screen size i.e. for PC/Laptop and Mobile Phones
 - Automatic API documentation at `/docs`
 
 ## Endpoints
@@ -28,6 +32,9 @@ FastAPI also builds an interactive test page for the API automatically, so every
 | POST | `/users` | Sign up with an email and password |
 | POST | `/login` | Sign in with an email and password |
 | GET | `/me` | Verify the current logged in user |
+| GET | `/me` | Verify the current logged in user |
+
+Note: All calls to /notes now need a bearer token
 
 Example body for `POST` and `PUT` on `/notes`:
 
@@ -69,9 +76,9 @@ Run the command from the project folder. The database file always sits next to `
 ## Notes
 
 - `notes.db` is listed in `.gitignore`, so your data and users are never uploaded to GitHub.
-- Notes are not tied to users yet. Login, and showing each person only their own notes, comes next. Do not put this on the internet before that is done.
-- If you change the structure of a table that already exists while practising, delete `notes.db` and restart so a new table is created.
-- The web page�s login form is the next step, because the page can�t call the protected routes yet.
+- After Login, the app shows each person only their own notes.
+- If you change the structure of a table that already exists while practicing, delete `notes.db` and restart so a new table is created.
+- The web page’s login form is the next step, because the page can’t call the protected routes yet.
 
 ## Roadmap
 
@@ -82,6 +89,13 @@ Run the command from the project folder. The database file always sits next to `
 - [x] Each user sees only their own notes
 - [x] The page now has a login and sign-up screen
 - [ ] Deploy online with a hosted database
+   ## Screenshots
+
+   ![Login screen iPhone](screenshots/login_iphone.png)
+   ![Notes page iPhone](screenshots/notes_iphone.png)
+   ![Login screen Android](screenshots/login_android.png)
+   ![Notes page Android](screenshots/notes_androaid.png)
+
 
 ## Built with
 
