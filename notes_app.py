@@ -10,7 +10,11 @@ from pathlib import Path
 import os
 import jwt
 from datetime import datetime, timedelta, timezone
+
 SECRET_KEY = os.environ.get("NOTES_SECRET", "dev-only-change-me-dev-only-change-me")
+
+if os.environ.get("RENDER") and not os.environ.get("NOTES_SECRET"):
+    raise RuntimeError("NOTES_SECRET is not set for RENDER")        # Can't start without a secret key on Render
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
