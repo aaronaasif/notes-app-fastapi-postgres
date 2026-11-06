@@ -10,11 +10,15 @@ from pathlib import Path
 import os
 import jwt
 from datetime import datetime, timedelta, timezone
+
 SECRET_KEY = os.environ.get("NOTES_SECRET", "dev-only-change-me-dev-only-change-me")
+
+if os.environ.get("RENDER") and not os.environ.get("NOTES_SECRET"):
+    raise RuntimeError("NOTES_SECRET is not set for RENDER")        # Can't start without a secret key on Render
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -75,7 +79,7 @@ class NoteIn(BaseModel):
 class SignupIn(BaseModel):
     """The shape of data we accept for user registration and login."""
     email: str
-    password: str
+    password: str = Field(min_length=8, max_length=50)
 
 def to_dict(row):
     """Turn a database row into a dict, with done as true/false."""
@@ -313,7 +317,7 @@ PAGE = """<!doctype html>
     <p class="sub">Log in or create an account.</p>
     <form id="auth-form">
         <input type="email" id="email" placeholder="enter your email address" required maxlength="120">
-        <input type="password" id="password" autocomplete="current-password" placeholder="enter your password" required maxlength="50">
+        <input type="password" id="password" autocomplete="current-password" placeholder="enter your password" required maxlength="50" minlength="8">
         <button class="submit" id="login" type="submit">Log In</button>
         <button class="signup" id="signups" type="button">Sign Up</button>
         <p class="msg" id="msg-error"></p>
