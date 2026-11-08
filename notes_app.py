@@ -4,7 +4,6 @@ Run:  uvicorn notes_app:app --reload
 Open: http://127.0.0.1:8000/        (the notes page)
       http://127.0.0.1:8000/docs    (automatic API test page)
 """
-#import sqlite3
 from pathlib import Path
 
 import os
@@ -39,17 +38,7 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
-# The database (here sqlite) file always sits next to this script,
-# no matter which folder you start the app from.
-# DB_FILE = Path(__file__).with_name("notes.db")
-
-# def get_db():
-#     """Open a connection to the database file."""
-#     db = sqlite3.connect(DB_FILE)
-#     db.row_factory = sqlite3.Row      # lets us read columns by name
-#     return db
-
-
+# Create the notes table if it doesn't exist
 def setup():
     """Create the table the first time the app starts."""
     with get_db() as db:
@@ -75,6 +64,7 @@ def setup():
 
 setup()
 
+# class for note data
 class NoteIn(BaseModel):
     """The shape of data we accept from the browser."""
     title: str
@@ -86,12 +76,6 @@ class SignupIn(BaseModel):
     """The shape of data we accept for user registration and login."""
     email: str
     password: str = Field(min_length=8, max_length=50)
-
-def to_dict(row):
-    """Turn a database row into a dict, with done as true/false."""
-    note = dict(row)
-    note["done"] = bool(note["done"])
-    return note
 
 
 # ---------------------------------------------------------------- API
@@ -139,7 +123,7 @@ def login_user(form: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
-#Login Authentication: Verify the current user's information
+# Login Authentication: Verify the current user's information
 @app.get("/me")
 def me(user_id: int = Depends(current_user_id)):
     # SELECT id, email FROM users WHERE id = %s   ->  return dict(row)
@@ -175,30 +159,37 @@ def update_note(note_id: int, note: NoteIn, user_id: int = Depends(current_user_
         return {"id": note_id, **note.model_dump()}
 
 
+# Read a single note by its id, return 404 if not found
+@app.get("/notes/{note_id}")
+def get_note(note_id: int, user_id: int = Depends(current_user_id)):
+    with get_db() as db:
+        cur = db.execute(
+            "SELECT id, title, body, done FROM notes WHERE id = %s AND user_id = %s",
+            (note_id, user_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "Note not found")
+        return row
+
+
+# Reads all notes for the current user, ordered by id descending
 @app.get("/notes")                          # READ (all)
 def list_notes(user_id: int = Depends(current_user_id)):
     with get_db() as db:
-        return [to_dict(r) for r in db.execute("SELECT * FROM notes WHERE user_id = %s ORDER BY id DESC", (user_id,))]
+        return db.execute(
+            "SELECT id, title, body, done FROM notes WHERE user_id = %s ORDER BY id DESC",
+            (user_id,),
+        ).fetchall()
 
 
-@app.get("/notes/{note_id}")                # READ (one)
-def get_note(note_id: int, user_id: int = Depends(current_user_id)):
-    with get_db() as db:
-        row = db.execute("SELECT * FROM notes WHERE id = %s AND user_id = %s", (note_id, user_id)).fetchone()
-    if row is None:
-        raise HTTPException(404, "Note not found")
-    return to_dict(row)
-
-
-
-
-
+# Delete a note by its id, return 204 No Content if successful
 @app.delete("/notes/{note_id}", status_code=204)   # DELETE
 def delete_note(note_id: int, user_id: int = Depends(current_user_id)):
     with get_db() as db:
         cur = db.execute("DELETE FROM notes WHERE id = %s AND user_id = %s", (note_id, user_id))
-    if cur.rowcount == 0:
-        raise HTTPException(404, "Note not found")
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Note not found")
 
 
 # --------------------------------------------------------------- PAGE
