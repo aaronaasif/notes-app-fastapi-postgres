@@ -4,7 +4,6 @@ Run:  uvicorn notes_app:app --reload
 Open: http://127.0.0.1:8000/        (the notes page)
       http://127.0.0.1:8000/docs    (automatic API test page)
 """
-import sqlite3
 from pathlib import Path
 
 import os
@@ -26,49 +25,46 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
 ph = PasswordHash.recommended()
 
-# The database file always sits next to this script,
-# no matter which folder you start the app from.
-DB_FILE = Path(__file__).with_name("notes.db")
-
 oauth2 = OAuth2PasswordBearer(tokenUrl="login")
 
 app = FastAPI(title="Notes app")
 
+# Use psycopg to connect to a PostgreSQL database instead of sqlite3
+import psycopg
+from psycopg.rows import dict_row
+
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 def get_db():
-    """Open a connection to the database file."""
-    db = sqlite3.connect(DB_FILE)
-    db.row_factory = sqlite3.Row      # lets us read columns by name
-    return db
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
-
+# Create the notes table if it doesn't exist
 def setup():
     """Create the table the first time the app starts."""
     with get_db() as db:
         db.execute(
             """CREATE TABLE IF NOT EXISTS notes (
-                   id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id    INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                    title TEXT NOT NULL,
                    body  TEXT NOT NULL DEFAULT '',
-                   done  BOOLEAN NOT NULL DEFAULT 0,
+                   done  BOOLEAN NOT NULL DEFAULT FALSE,
                    user_id INTEGER NOT NULL
-               )"""
-        )
-
-#create a table for user and password
-    #with get_db() as db:
+               )""" 
+        )  
+    
+# Create a table for user and password
+    with get_db() as db:
         db.execute(
                     """CREATE TABLE IF NOT EXISTS users (
-                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                           email TEXT NOT NULL UNIQUE,
                           password_hash TEXT NOT NULL
                       )"""
                 )
 
-
 setup()
 
-
+# class for note data
 class NoteIn(BaseModel):
     """The shape of data we accept from the browser."""
     title: str
@@ -81,12 +77,6 @@ class SignupIn(BaseModel):
     email: str
     password: str = Field(min_length=8, max_length=50)
 
-def to_dict(row):
-    """Turn a database row into a dict, with done as true/false."""
-    note = dict(row)
-    note["done"] = bool(note["done"])
-    return note
-
 
 # ---------------------------------------------------------------- API
 
@@ -98,29 +88,19 @@ def current_user_id(token: str = Depends(oauth2)):
     return int(payload["sub"])        # this is why sub must be a string, then converted back
 
 
-@app.post("/notes", status_code=201)       # CREATE
-def add_note(note: NoteIn, user_id: int = Depends(current_user_id)):
-    with get_db() as db:
-        cur = db.execute(
-            "INSERT INTO notes (title, body, done, user_id) VALUES (?, ?, ?, ?)",
-            (note.title, note.body, int(note.done), user_id),
-        )
-        return {"id": cur.lastrowid, **note.model_dump()}
-
-
 # A route for user registration
 @app.post("/users", status_code=201)
 def register_user(user: SignupIn):
     hashed = ph.hash(user.password)          # hash first, outside the database block
     try:
         with get_db() as db:
-            cur = db.execute(
-                "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+            row = db.execute(
+                "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id",
                 (user.email, hashed),
-            )
-    except sqlite3.IntegrityError:           # the UNIQUE email rule was broken
+            ).fetchone()
+    except psycopg.errors.UniqueViolation:          # the UNIQUE email rule was broken
         raise HTTPException(409, "Email already registered")
-    return {"id": cur.lastrowid, "email": user.email}
+    return {"id": row["id"], "email": user.email}
 
 
 #A route for user login authentication
@@ -129,7 +109,7 @@ def login_user(form: OAuth2PasswordRequestForm = Depends()):
     # form.username is the email, form.password is the password
     with get_db() as db:
         row = db.execute(
-            "SELECT id, password_hash FROM users WHERE email = ?",
+            "SELECT id, password_hash FROM users WHERE email = %s",
             (form.username,)
         ).fetchone()
     if row is None:
@@ -143,50 +123,73 @@ def login_user(form: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
-#Login Authentication: Verify the current user's information
+# Login Authentication: Verify the current user's information
 @app.get("/me")
 def me(user_id: int = Depends(current_user_id)):
-    # SELECT id, email FROM users WHERE id = ?   ->  return dict(row)
+    # SELECT id, email FROM users WHERE id = %s   ->  return dict(row)
     with get_db() as db:
-        row = db.execute("SELECT id, email FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = db.execute("SELECT id, email FROM users WHERE id = %s", (user_id,)).fetchone()
     if row is None:
             raise HTTPException(401, "User not found")
     return {"id": row["id"], "email": row["email"]}
 
 
-@app.get("/notes")                          # READ (all)
-def list_notes(user_id: int = Depends(current_user_id)):
+# Create a new note, return its id and the data we just saved
+@app.post("/notes", status_code=201)      
+def add_note(note: NoteIn, user_id: int = Depends(current_user_id)):
     with get_db() as db:
-        return [to_dict(r) for r in db.execute("SELECT * FROM notes WHERE user_id = ? ORDER BY id DESC", (user_id,))]
+        cur = db.execute(
+            "INSERT INTO notes (title, body, done, user_id) VALUES (%s, %s, %s, %s) RETURNING id",
+            (note.title, note.body, note.done, user_id),
+        )
+        row = cur.fetchone()
+        return {"id": row["id"], **note.model_dump()}
 
 
-@app.get("/notes/{note_id}")                # READ (one)
-def get_note(note_id: int, user_id: int = Depends(current_user_id)):
-    with get_db() as db:
-        row = db.execute("SELECT * FROM notes WHERE id = ? AND user_id = ?", (note_id, user_id)).fetchone()
-    if row is None:
-        raise HTTPException(404, "Note not found")
-    return to_dict(row)
-
-
+# Update an existing note, return its id and the new data
 @app.put("/notes/{note_id}")                # UPDATE
 def update_note(note_id: int, note: NoteIn, user_id: int = Depends(current_user_id)):
     with get_db() as db:
         cur = db.execute(
-            "UPDATE notes SET title = ?, body = ?, done = ? WHERE id = ? AND user_id = ?",
-            (note.title, note.body, int(note.done), note_id, user_id),
+            "UPDATE notes SET title = %s, body = %s, done = %s WHERE id = %s AND user_id = %s",
+            (note.title, note.body, note.done, note_id, user_id),
         )
-    if cur.rowcount == 0:
-        raise HTTPException(404, "Note not found")
-    return {"id": note_id, **note.model_dump()}
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Note not found")
+        return {"id": note_id, **note.model_dump()}
 
 
+# Read a single note by its id, return 404 if not found
+@app.get("/notes/{note_id}")
+def get_note(note_id: int, user_id: int = Depends(current_user_id)):
+    with get_db() as db:
+        cur = db.execute(
+            "SELECT id, title, body, done FROM notes WHERE id = %s AND user_id = %s",
+            (note_id, user_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "Note not found")
+        return row
+
+
+# Reads all notes for the current user, ordered by id descending
+@app.get("/notes")                          # READ (all)
+def list_notes(user_id: int = Depends(current_user_id)):
+    with get_db() as db:
+        return db.execute(
+            "SELECT id, title, body, done FROM notes WHERE user_id = %s ORDER BY id DESC",
+            (user_id,),
+        ).fetchall()
+
+
+# Delete a note by its id, return 204 No Content if successful
 @app.delete("/notes/{note_id}", status_code=204)   # DELETE
 def delete_note(note_id: int, user_id: int = Depends(current_user_id)):
     with get_db() as db:
-        cur = db.execute("DELETE FROM notes WHERE id = ? AND user_id = ?", (note_id, user_id))
-    if cur.rowcount == 0:
-        raise HTTPException(404, "Note not found")
+        cur = db.execute("DELETE FROM notes WHERE id = %s AND user_id = %s", (note_id, user_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Note not found")
 
 
 # --------------------------------------------------------------- PAGE
@@ -583,6 +586,7 @@ PAGE = """<!doctype html>
   });
 
   async function toggleDone(n, done) {
+    showError("");                                   // clear any old message
     const res = await api("/notes/" + n.id, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
