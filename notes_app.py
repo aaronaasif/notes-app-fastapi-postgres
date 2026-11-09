@@ -272,6 +272,7 @@ PAGE = """<!doctype html>
 
   /*messages and empty state */
   .msg { color: var(--danger); min-height: 20px; margin: 0; font-size: 14px; }
+  .msg.ok { color: var(--ink);}
   .msg:empty { display: none; }          /* no empty gap when there is no message */
   .empty { color: var(--muted); text-align: center; padding: var(--s4) 0; }
 
@@ -351,8 +352,9 @@ PAGE = """<!doctype html>
   function showAuth() { authEl.hidden = false; appEl.hidden = true; }
   function showApp()  { authEl.hidden = true;  appEl.hidden = false; }
   function showError(text) { msgEl.textContent = text || ""; }
-  function showAuthError(text) { msgErrorEl.textContent = text || ""; }
-  
+  function showAuthError(text) { msgErrorEl.classList.remove("ok"); msgErrorEl.textContent = text || ""; }
+  function showAuthNotice(text) { msgErrorEl.classList.add("ok"); msgErrorEl.textContent = text || ""; }
+
     // ---- Login ----
     let token = null;
     try { token = localStorage.getItem("token"); } catch (e) {}
@@ -409,8 +411,9 @@ PAGE = """<!doctype html>
          }
  
          if (res.status === 409) { showAuthError("That email is already registered. Try logging in."); return; }
+         if (res.status === 422) { showAuthError("Password must be 8 to 50 characters."); return; }
          if (!res.ok) { showAuthError("Sign up failed. Check your details and try again."); return; }
-         showAuthError("Account created. You can log in now.");
+         showAuthNotice("Account created. You can log in now.");
     });
  
     // Clear the token and go back to the login card
@@ -454,6 +457,7 @@ PAGE = """<!doctype html>
         listEl.innerHTML = "";
         whoEl.textContent = "";
         countEl.textContent = "";
+        showAuthError("");
     });
 
     // Ask the API for all notes and draw them.
