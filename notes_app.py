@@ -460,16 +460,20 @@ PAGE = """<!doctype html>
         showAuthError("");
     });
 
+    
+    // Function to update the done count based on the current notes in the list
+    function updateDoneCount() {
+    const total = listEl.querySelectorAll(".note").length;
+    const done  = listEl.querySelectorAll(".note.done").length;
+    countEl.textContent = total ? `${done} of ${total} done` : "";
+}
+
     // Ask the API for all notes and draw them.
     async function loadNotes() {
         const res = await api("/notes");
         if (!res.ok) return;
         const notes = await res.json();
     
-    //adding counter for done notes
-    const doneCount = notes.filter(n => n.done).length;
-    countEl.textContent = `${doneCount} of ${notes.length} done`; 
-
         listEl.innerHTML = "";
         if (notes.length === 0) {
         const empty = document.createElement("p");
@@ -477,8 +481,10 @@ PAGE = """<!doctype html>
         empty.textContent = "No notes yet. Add your first one above.";
         listEl.appendChild(empty);
         return;
-        }
-        for (const n of notes) listEl.appendChild(drawNote(n));
+        } else {
+            for (const n of notes) listEl.appendChild(drawNote(n));
+            }
+        updateDoneCount();  // Update the done count before drawing notes
     }
 
     // Build one note card. textContent keeps user text safe (never run as HTML).
@@ -490,7 +496,7 @@ PAGE = """<!doctype html>
         box.type = "checkbox";
         box.checked = n.done;
         box.setAttribute("aria-label", "Mark as done");
-        box.addEventListener("change", () => toggleDone(n, box.checked));
+        box.addEventListener("change", () => toggleDone(n, box.checked, card));
 
         const text = document.createElement("div");
         const h = document.createElement("h3");
@@ -502,70 +508,70 @@ PAGE = """<!doctype html>
         text.appendChild(p);
         }
 
-    // add delete button to each note card
-    const del = document.createElement("button");
-    del.className = "del";
-    del.textContent = "Delete";
-    del.addEventListener("click", () => removeNote(n.id));
+        // add delete button to each note card
+        const del = document.createElement("button");
+        del.className = "del";
+        del.textContent = "Delete";
+        del.addEventListener("click", () => removeNote(n.id));
 
-    //add edit button to each note card 
-    const edit = document.createElement("button");
-    edit.className = "edit";
-    edit.textContent = "Edit";
-    edit.addEventListener("click", () => startEdit(card, n));
+        //add edit button to each note card 
+        const edit = document.createElement("button");
+        edit.className = "edit";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => startEdit(card, n));
 
-    card.append(box, text, edit, del);          // edit button goes before del
-    return card;
-  }
+        card.append(box, text, edit, del);          // edit button goes before del
+        return card;
+    }
 
-  // Edit button: replace the note card with a form to edit it.
-  function startEdit(card, n) {
-    card.className = "note editing";
-    card.innerHTML = "";                         // clear the card
+    // Edit button: replace the note card with a form to edit it.
+    function startEdit(card, n) {
+        card.className = "note editing";
+        card.innerHTML = "";                         // clear the card
 
-    const titleIn = document.createElement("input");
-    titleIn.type = "text";
-    titleIn.maxLength = 120;
-    titleIn.value = n.title;                     // .value is safe: never read as HTML
+        const titleIn = document.createElement("input");
+        titleIn.type = "text";
+        titleIn.maxLength = 120;
+        titleIn.value = n.title;                     // .value is safe: never read as HTML
 
-    const bodyIn = document.createElement("textarea");
-    bodyIn.value = n.body;
+        const bodyIn = document.createElement("textarea");
+        bodyIn.value = n.body;
 
-    const save = document.createElement("button");
-    save.className = "submit";
-    save.textContent = "Save";
+        const save = document.createElement("button");
+        save.className = "submit";
+        save.textContent = "Save";
 
-    // Save button: send the changes to the API, then redraw the note card.
-    const err = document.createElement("p");          // a message line inside this card
-    err.className = "msg";
+        // Save button: send the changes to the API, then redraw the note card.
+        const err = document.createElement("p");          // a message line inside this card
+        err.className = "msg";
 
-    save.addEventListener("click", async () => {
-    const title = titleIn.value.trim();
-    if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
-    err.textContent = "";
-    save.disabled = true;
-    const res = await api("/notes/" + n.id, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
-    });
-    if (!res.ok) { err.textContent = "Could not save changes."; save.disabled = false; return; }
-    await loadNotes();
-    }); 
+        save.addEventListener("click", async () => {
+        const title = titleIn.value.trim();
+        if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
+        err.textContent = "";
+        save.disabled = true;
+        const res = await api("/notes/" + n.id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
+        });
+        if (!res.ok) { err.textContent = "Could not save changes."; save.disabled = false; return; }
+        await loadNotes();
+        }); 
 
-    // Cancel Button: replace the form with the original note card.
-    const cancel = document.createElement("button");
-    cancel.className = "cancel";
-    cancel.textContent = "Cancel";
-    cancel.addEventListener("click", () => card.replaceWith(drawNote(n)));
+        // Cancel Button: replace the form with the original note card.
+        const cancel = document.createElement("button");
+        cancel.className = "cancel";
+        cancel.textContent = "Cancel";
+        cancel.addEventListener("click", () => card.replaceWith(drawNote(n)));
 
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    actions.append(save, cancel);
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        actions.append(save, cancel);
 
-    card.append(titleIn, bodyIn, err, actions);
-    titleIn.focus();
-  }
+        card.append(titleIn, bodyIn, err, actions);
+        titleIn.focus();
+    }
 
   // The Submit button: send the form to the API as a new note.
   form.addEventListener("submit", async (event) => {
@@ -589,22 +595,30 @@ PAGE = """<!doctype html>
     }
   });
 
-  async function toggleDone(n, done) {
-    showError("");                                   // clear any old message
-    const res = await api("/notes/" + n.id, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: n.title, body: n.body, done: done }),
-    });
-    if (!res.ok) showError("Could not update the note.");
-    await loadNotes();
-  }
 
-  async function removeNote(id) {
-    const res = await api("/notes/" + id, { method: "DELETE" });
-    if (!res.ok) showError("Could not delete the note.");
-    await loadNotes();
-  }
+  // Toggle the done state of a note. Update the local copy, the card's appearance, and the server.
+    async function toggleDone(n, done, card) {
+        showError("");                                   // clear any old message
+        n.done = done;                                   // update the new note done state in memory
+        card.classList.toggle("done", done);             // update the card's appearance
+        updateDoneCount();
+        try {
+            const res = await api("/notes/" + n.id, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: n.title, body: n.body, done: done }),
+            });
+            if (res.ok) return;                  // success: the page is already correct
+        } catch (err) { /* network failure: fall through to the error path */ }
+        showError("Could not update the note.");
+        await loadNotes();                       // failure: redraw from the server's truth
+    }
+
+    async function removeNote(id) {
+        const res = await api("/notes/" + id, { method: "DELETE" });
+        if (!res.ok) showError("Could not delete the note.");
+        await loadNotes();
+    }
 
   init();  // check for a token and load the notes if it is valid
 
