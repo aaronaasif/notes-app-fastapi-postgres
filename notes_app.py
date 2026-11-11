@@ -238,7 +238,7 @@ PAGE = """<!doctype html>
            border-radius: var(--radius); padding: 9px 16px; transition: background .15s, filter .15s; }
   .submit { background: var(--accent); color: #fff; justify-self: start; }
   .submit:hover { filter: brightness(.94); }
-  .submit:disabled { opacity: .6; cursor: default; }
+  .button:disabled { opacity: .6; cursor: default; }
   .edit { background: transparent; color: var(--accent); padding: 6px 10px; font-size: 14px; }
   .edit:hover { background: var(--accent-soft); }
   .del { background: transparent; color: var(--danger); padding: 6px 10px; font-size: 14px; }
@@ -347,6 +347,7 @@ PAGE = """<!doctype html>
   const whoEl = document.getElementById("who");
   const logoutEl = document.getElementById("logout");
   const signupEl = document.getElementById("signups");
+  const loginEl = document.getElementById("login");
 
 
   function showAuth() { authEl.hidden = false; appEl.hidden = true; }
@@ -354,35 +355,57 @@ PAGE = """<!doctype html>
   function showError(text) { msgEl.textContent = text || ""; }
   function showAuthError(text) { msgErrorEl.classList.remove("ok"); msgErrorEl.textContent = text || ""; }
   function showAuthNotice(text) { msgErrorEl.classList.add("ok"); msgErrorEl.textContent = text || ""; }
+  function setBusy(busy) { loginEl.disabled = busy; signupEl.disabled = busy; loginEl.textContent = busy ? "Please wait…" : "Log In"; }
+    
+      
+    // Like fetch, but gives up after `ms` milliseconds (default 15 s).
+    async function fetchTimeout(url, options = {}, ms = 15000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+            clearTimeout(timer);            // always stop the timer, success or failure
+        }
+    }
+
+    
+    const SLOW_MSG = "The server is taking longer than usual to respond. It may be waking up. Please try again in a minute.";
+    
+    // Returns a user-friendly message based on the error type
+    function netMessage(err) {
+        return err.name === "AbortError" ? SLOW_MSG : "Cannot reach the server. Try again.";
+    }  
+  
 
     // ---- Login ----
     let token = null;
     try { token = localStorage.getItem("token"); } catch (e) {}
 
     authForm.addEventListener("submit", async (event) => {
-            // preventDefault
-            event.preventDefault();
-            // clear the old error
-            showAuthError(""); 
-            // send POST /login
+        // preventDefault
+        event.preventDefault();
+        // clear the old error
+        showAuthError(""); 
+        setBusy(true);
+        try {
             let res;
             try {
-            res = await fetch("/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({ username: emailEl.value.trim(), password: passEl.value }),
-            });
+                res = await fetchTimeout("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({ username: emailEl.value.trim(), password: passEl.value }),
+                });
             } catch (err) {
-            showAuthError("Cannot reach the server. Try again.");
-            return;
+                showAuthError(netMessage(err));
+                return;
             }
 
-        if (!res.ok) {
-            showAuthError(res.status === 401 ? "Invalid email or password" : "Login failed. Try again.");
-            return;                                   // stop here
+            if (!res.ok) {
+                showAuthError(res.status === 401 ? "Invalid email or password" : "Login failed. Try again.");
+                return;
             }
-            
-            // handle failure, save the token, call showApp()
+
             const data = await res.json();
             token = data.access_token;
             try { localStorage.setItem("token", token); } catch (e) {}
@@ -390,30 +413,38 @@ PAGE = """<!doctype html>
             await loadWho();
             showApp();
             await loadNotes();
+        } catch (err) {
+            showAuthError(netMessage(err));     // timeout in loadWho/loadNotes
+        } finally {
+            setBusy(false);
+        }
     });
 
+    
     // New Signup button: send POST /users to register a new user
     signupEl.addEventListener("click", async () => {
-         console.log("signup clicked");
-         showAuthError("");
-         if (!authForm.reportValidity()) return;
- 
-         let res;
-         try {
-             res = await fetch("/users", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({ email: emailEl.value.trim(), password: passEl.value }),
-             });
-         } catch (err) {
-             showAuthError("Cannot reach the server. Try again.");
-             return;
-         }
- 
-         if (res.status === 409) { showAuthError("That email is already registered. Try logging in."); return; }
-         if (res.status === 422) { showAuthError("Password must be 8 to 50 characters."); return; }
-         if (!res.ok) { showAuthError("Sign up failed. Check your details and try again."); return; }
-         showAuthNotice("Account created. You can log in now.");
+        showAuthError("");
+        if (!authForm.reportValidity()) return;
+        setBusy(true);
+        try {
+            let res;
+            try {
+                res = await fetchTimeout("/users", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: emailEl.value.trim(), password: passEl.value }),
+                });
+            } catch (err) {
+                showAuthError(netMessage(err));
+                return;
+            }
+            if (res.status === 409) { showAuthError("That email is already registered. Try logging in."); return; }
+            if (res.status === 422) { showAuthError("Password must be 8 to 50 characters."); return; }
+            if (!res.ok) { showAuthError("Sign up failed. Check your details and try again."); return; }
+            showAuthNotice("Account created. You can log in now.");   
+        } finally {
+            setBusy(false);
+        }
     });
  
     // Clear the token and go back to the login card
@@ -423,13 +454,15 @@ PAGE = """<!doctype html>
         showAuth();
     }
 
-    // Like fetch, but adds the login token. On a 401, go back to the login card.
+    
+    // Like fetch, but adds the login token. On a 401, go back to the login card. Waits for a maximum of 15 seconds before giving up.
     async function api(path, options = {}) {
         const headers = { ...(options.headers || {}), Authorization: "Bearer " + token };
-        const res = await fetch(path, { ...options, headers });
+        const res = await fetchTimeout(path, { ...options, headers });
         if (res.status === 401) clearSession();
         return res;
     }
+
 
     // load the current user's info and display it
     async function loadWho() {
@@ -460,16 +493,20 @@ PAGE = """<!doctype html>
         showAuthError("");
     });
 
+    
+    // Function to update the done count based on the current notes in the list
+    function updateDoneCount() {
+    const total = listEl.querySelectorAll(".note").length;
+    const done  = listEl.querySelectorAll(".note.done").length;
+    countEl.textContent = total ? `${done} of ${total} done` : "";
+}
+
     // Ask the API for all notes and draw them.
     async function loadNotes() {
         const res = await api("/notes");
         if (!res.ok) return;
         const notes = await res.json();
     
-    //adding counter for done notes
-    const doneCount = notes.filter(n => n.done).length;
-    countEl.textContent = `${doneCount} of ${notes.length} done`; 
-
         listEl.innerHTML = "";
         if (notes.length === 0) {
         const empty = document.createElement("p");
@@ -477,8 +514,10 @@ PAGE = """<!doctype html>
         empty.textContent = "No notes yet. Add your first one above.";
         listEl.appendChild(empty);
         return;
-        }
-        for (const n of notes) listEl.appendChild(drawNote(n));
+        } else {
+            for (const n of notes) listEl.appendChild(drawNote(n));
+            }
+        updateDoneCount();  // Update the done count before drawing notes
     }
 
     // Build one note card. textContent keeps user text safe (never run as HTML).
@@ -490,7 +529,7 @@ PAGE = """<!doctype html>
         box.type = "checkbox";
         box.checked = n.done;
         box.setAttribute("aria-label", "Mark as done");
-        box.addEventListener("change", () => toggleDone(n, box.checked));
+        box.addEventListener("change", () => toggleDone(n, box.checked, card));
 
         const text = document.createElement("div");
         const h = document.createElement("h3");
@@ -502,70 +541,70 @@ PAGE = """<!doctype html>
         text.appendChild(p);
         }
 
-    // add delete button to each note card
-    const del = document.createElement("button");
-    del.className = "del";
-    del.textContent = "Delete";
-    del.addEventListener("click", () => removeNote(n.id));
+        // add delete button to each note card
+        const del = document.createElement("button");
+        del.className = "del";
+        del.textContent = "Delete";
+        del.addEventListener("click", () => removeNote(n.id));
 
-    //add edit button to each note card 
-    const edit = document.createElement("button");
-    edit.className = "edit";
-    edit.textContent = "Edit";
-    edit.addEventListener("click", () => startEdit(card, n));
+        //add edit button to each note card 
+        const edit = document.createElement("button");
+        edit.className = "edit";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => startEdit(card, n));
 
-    card.append(box, text, edit, del);          // edit button goes before del
-    return card;
-  }
+        card.append(box, text, edit, del);          // edit button goes before del
+        return card;
+    }
 
-  // Edit button: replace the note card with a form to edit it.
-  function startEdit(card, n) {
-    card.className = "note editing";
-    card.innerHTML = "";                         // clear the card
+    // Edit button: replace the note card with a form to edit it.
+    function startEdit(card, n) {
+        card.className = "note editing";
+        card.innerHTML = "";                         // clear the card
 
-    const titleIn = document.createElement("input");
-    titleIn.type = "text";
-    titleIn.maxLength = 120;
-    titleIn.value = n.title;                     // .value is safe: never read as HTML
+        const titleIn = document.createElement("input");
+        titleIn.type = "text";
+        titleIn.maxLength = 120;
+        titleIn.value = n.title;                     // .value is safe: never read as HTML
 
-    const bodyIn = document.createElement("textarea");
-    bodyIn.value = n.body;
+        const bodyIn = document.createElement("textarea");
+        bodyIn.value = n.body;
 
-    const save = document.createElement("button");
-    save.className = "submit";
-    save.textContent = "Save";
+        const save = document.createElement("button");
+        save.className = "submit";
+        save.textContent = "Save";
 
-    // Save button: send the changes to the API, then redraw the note card.
-    const err = document.createElement("p");          // a message line inside this card
-    err.className = "msg";
+        // Save button: send the changes to the API, then redraw the note card.
+        const err = document.createElement("p");          // a message line inside this card
+        err.className = "msg";
 
-    save.addEventListener("click", async () => {
-    const title = titleIn.value.trim();
-    if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
-    err.textContent = "";
-    save.disabled = true;
-    const res = await api("/notes/" + n.id, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
-    });
-    if (!res.ok) { err.textContent = "Could not save changes."; save.disabled = false; return; }
-    await loadNotes();
-    }); 
+        save.addEventListener("click", async () => {
+        const title = titleIn.value.trim();
+        if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
+        err.textContent = "";
+        save.disabled = true;
+        const res = await api("/notes/" + n.id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
+        });
+        if (!res.ok) { err.textContent = "Could not save changes."; save.disabled = false; return; }
+        await loadNotes();
+        }); 
 
-    // Cancel Button: replace the form with the original note card.
-    const cancel = document.createElement("button");
-    cancel.className = "cancel";
-    cancel.textContent = "Cancel";
-    cancel.addEventListener("click", () => card.replaceWith(drawNote(n)));
+        // Cancel Button: replace the form with the original note card.
+        const cancel = document.createElement("button");
+        cancel.className = "cancel";
+        cancel.textContent = "Cancel";
+        cancel.addEventListener("click", () => card.replaceWith(drawNote(n)));
 
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    actions.append(save, cancel);
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        actions.append(save, cancel);
 
-    card.append(titleIn, bodyIn, err, actions);
-    titleIn.focus();
-  }
+        card.append(titleIn, bodyIn, err, actions);
+        titleIn.focus();
+    }
 
   // The Submit button: send the form to the API as a new note.
   form.addEventListener("submit", async (event) => {
@@ -589,22 +628,30 @@ PAGE = """<!doctype html>
     }
   });
 
-  async function toggleDone(n, done) {
-    showError("");                                   // clear any old message
-    const res = await api("/notes/" + n.id, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: n.title, body: n.body, done: done }),
-    });
-    if (!res.ok) showError("Could not update the note.");
-    await loadNotes();
-  }
 
-  async function removeNote(id) {
-    const res = await api("/notes/" + id, { method: "DELETE" });
-    if (!res.ok) showError("Could not delete the note.");
-    await loadNotes();
-  }
+  // Toggle the done state of a note. Update the local copy, the card's appearance, and the server.
+    async function toggleDone(n, done, card) {
+        showError("");                                   // clear any old message
+        n.done = done;                                   // update the new note done state in memory
+        card.classList.toggle("done", done);             // update the card's appearance
+        updateDoneCount();
+        try {
+            const res = await api("/notes/" + n.id, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: n.title, body: n.body, done: done }),
+            });
+            if (res.ok) return;                  // success: the page is already correct
+        } catch (err) { /* network failure: fall through to the error path */ }
+        showError("Could not update the note.");
+        await loadNotes();                       // failure: redraw from the server's truth
+    }
+
+    async function removeNote(id) {
+        const res = await api("/notes/" + id, { method: "DELETE" });
+        if (!res.ok) showError("Could not delete the note.");
+        await loadNotes();
+    }
 
   init();  // check for a token and load the notes if it is valid
 
