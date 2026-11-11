@@ -238,7 +238,7 @@ PAGE = """<!doctype html>
            border-radius: var(--radius); padding: 9px 16px; transition: background .15s, filter .15s; }
   .submit { background: var(--accent); color: #fff; justify-self: start; }
   .submit:hover { filter: brightness(.94); }
-  .submit:disabled { opacity: .6; cursor: default; }
+  .button:disabled { opacity: .6; cursor: default; }
   .edit { background: transparent; color: var(--accent); padding: 6px 10px; font-size: 14px; }
   .edit:hover { background: var(--accent-soft); }
   .del { background: transparent; color: var(--danger); padding: 6px 10px; font-size: 14px; }
@@ -347,6 +347,7 @@ PAGE = """<!doctype html>
   const whoEl = document.getElementById("who");
   const logoutEl = document.getElementById("logout");
   const signupEl = document.getElementById("signups");
+  const loginEl = document.getElementById("login");
 
 
   function showAuth() { authEl.hidden = false; appEl.hidden = true; }
@@ -354,35 +355,57 @@ PAGE = """<!doctype html>
   function showError(text) { msgEl.textContent = text || ""; }
   function showAuthError(text) { msgErrorEl.classList.remove("ok"); msgErrorEl.textContent = text || ""; }
   function showAuthNotice(text) { msgErrorEl.classList.add("ok"); msgErrorEl.textContent = text || ""; }
+  function setBusy(busy) { loginEl.disabled = busy; signupEl.disabled = busy; loginEl.textContent = busy ? "Please wait…" : "Log In"; }
+    
+      
+    // Like fetch, but gives up after `ms` milliseconds (default 15 s).
+    async function fetchTimeout(url, options = {}, ms = 15000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+            clearTimeout(timer);            // always stop the timer, success or failure
+        }
+    }
+
+    
+    const SLOW_MSG = "The server is taking longer than usual to respond. It may be waking up. Please try again in a minute.";
+    
+    // Returns a user-friendly message based on the error type
+    function netMessage(err) {
+        return err.name === "AbortError" ? SLOW_MSG : "Cannot reach the server. Try again.";
+    }  
+  
 
     // ---- Login ----
     let token = null;
     try { token = localStorage.getItem("token"); } catch (e) {}
 
     authForm.addEventListener("submit", async (event) => {
-            // preventDefault
-            event.preventDefault();
-            // clear the old error
-            showAuthError(""); 
-            // send POST /login
+        // preventDefault
+        event.preventDefault();
+        // clear the old error
+        showAuthError(""); 
+        setBusy(true);
+        try {
             let res;
             try {
-            res = await fetch("/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({ username: emailEl.value.trim(), password: passEl.value }),
-            });
+                res = await fetchTimeout("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({ username: emailEl.value.trim(), password: passEl.value }),
+                });
             } catch (err) {
-            showAuthError("Cannot reach the server. Try again.");
-            return;
+                showAuthError(netMessage(err));
+                return;
             }
 
-        if (!res.ok) {
-            showAuthError(res.status === 401 ? "Invalid email or password" : "Login failed. Try again.");
-            return;                                   // stop here
+            if (!res.ok) {
+                showAuthError(res.status === 401 ? "Invalid email or password" : "Login failed. Try again.");
+                return;
             }
-            
-            // handle failure, save the token, call showApp()
+
             const data = await res.json();
             token = data.access_token;
             try { localStorage.setItem("token", token); } catch (e) {}
@@ -390,30 +413,38 @@ PAGE = """<!doctype html>
             await loadWho();
             showApp();
             await loadNotes();
+        } catch (err) {
+            showAuthError(netMessage(err));     // timeout in loadWho/loadNotes
+        } finally {
+            setBusy(false);
+        }
     });
 
+    
     // New Signup button: send POST /users to register a new user
     signupEl.addEventListener("click", async () => {
-         console.log("signup clicked");
-         showAuthError("");
-         if (!authForm.reportValidity()) return;
- 
-         let res;
-         try {
-             res = await fetch("/users", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({ email: emailEl.value.trim(), password: passEl.value }),
-             });
-         } catch (err) {
-             showAuthError("Cannot reach the server. Try again.");
-             return;
-         }
- 
-         if (res.status === 409) { showAuthError("That email is already registered. Try logging in."); return; }
-         if (res.status === 422) { showAuthError("Password must be 8 to 50 characters."); return; }
-         if (!res.ok) { showAuthError("Sign up failed. Check your details and try again."); return; }
-         showAuthNotice("Account created. You can log in now.");
+        showAuthError("");
+        if (!authForm.reportValidity()) return;
+        setBusy(true);
+        try {
+            let res;
+            try {
+                res = await fetchTimeout("/users", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: emailEl.value.trim(), password: passEl.value }),
+                });
+            } catch (err) {
+                showAuthError(netMessage(err));
+                return;
+            }
+            if (res.status === 409) { showAuthError("That email is already registered. Try logging in."); return; }
+            if (res.status === 422) { showAuthError("Password must be 8 to 50 characters."); return; }
+            if (!res.ok) { showAuthError("Sign up failed. Check your details and try again."); return; }
+            showAuthNotice("Account created. You can log in now.");   
+        } finally {
+            setBusy(false);
+        }
     });
  
     // Clear the token and go back to the login card
@@ -423,13 +454,15 @@ PAGE = """<!doctype html>
         showAuth();
     }
 
-    // Like fetch, but adds the login token. On a 401, go back to the login card.
+    
+    // Like fetch, but adds the login token. On a 401, go back to the login card. Waits for a maximum of 15 seconds before giving up.
     async function api(path, options = {}) {
         const headers = { ...(options.headers || {}), Authorization: "Bearer " + token };
-        const res = await fetch(path, { ...options, headers });
+        const res = await fetchTimeout(path, { ...options, headers });
         if (res.status === 401) clearSession();
         return res;
     }
+
 
     // load the current user's info and display it
     async function loadWho() {
