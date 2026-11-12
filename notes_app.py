@@ -1,4 +1,4 @@
-"""Lesson 2: the same notes API, now with a web page.
+"""Notes app: FastAPI + PostgreSQL + vanilla JS
 
 Run:  uvicorn notes_app:app --reload
 Open: http://127.0.0.1:8000/        (the notes page)
@@ -201,13 +201,15 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Notes</title>
 <style>
-:root {
-    --bg: #f6f3ee;  --card: #ffffff;  --ink: #15171c;  --muted: #636875;  --line: #e4dfd6;
-    --accent: #d9480f;  --accent-soft: #fbe6da;
-    --danger: #b42318;  --danger-bg: #fdecea;
-    --radius: 8px;
-    --s1: 8px;  --s2: 12px;  --s3: 16px;  --s4: 24px;
-  }
+
+  :root {
+        --bg: #f6f3ee;  --card: #ffffff;  --ink: #15171c;  --muted: #636875;  --line: #e4dfd6;
+        --accent: #d9480f;  --accent-soft: #fbe6da;
+        --danger: #b42318;  --danger-bg: #fdecea;
+        --radius: 8px;
+        --s1: 8px;  --s2: 12px;  --s3: 16px;  --s4: 24px;
+    }
+
   * { box-sizing: border-box; }
   body { margin: 0; font: 16px/1.5 "DM Sans", system-ui, "Segoe UI", Arial, sans-serif;
          background: var(--bg); color: var(--ink); }
@@ -215,6 +217,7 @@ PAGE = """<!doctype html>
 
   h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 34px;
        line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 4px; }
+
   .sub { color: var(--muted); margin: 0 0 var(--s3); }
   .sec-block { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
                padding: var(--s4); margin: 0 0 var(--s4); }
@@ -243,7 +246,7 @@ PAGE = """<!doctype html>
   .edit:hover { background: var(--accent-soft); }
   .del { background: transparent; color: var(--danger); padding: 6px 10px; font-size: 14px; }
   .del:hover { background: var(--danger-bg); }
-  .cancel { background: transparent; color: var(--muted); border-size: 1px solid var(--line); }
+  .cancel { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .cancel:hover { background: var(--bg); }
   .logout, .signup { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 6px 14px; font-size: 14px; white-space: nowrap; }
   .logout:hover, .signup:hover {
@@ -259,6 +262,7 @@ PAGE = """<!doctype html>
   .note input[type=checkbox] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); }
   .note h3 { margin: 0; font-size: 17px; line-height: 1.35; }
   .note p { margin: 4px 0 0; color: var(--muted); font-size: 15px; white-space: pre-wrap; }
+  .note .msg { color: var(--danger); margin: 0; font-size: 14px; }
   .note { border-left: 4px solid var(--accent); }                /* active note: accent edge */
   .note.done { opacity: .65; border-left-color: var(--line); }   /* done note: quiet edge */
   .note.done h3 { text-decoration: line-through; color: var(--muted); }
@@ -293,25 +297,25 @@ PAGE = """<!doctype html>
   <section class="sec-block" id="app" hidden>
 
     <header class="topbar">
-    <h1>Notes</h1>
-    <div class="who-box">
-        <span class="sub">Signed in as <span id="who"></span></span>
-        <button type="button" class="logout" id="logout">Log Out</button>
-    </div>
+        <h1>Notes</h1>
+        <div class="who-box">
+            <span class="sub">Signed in as <span id="who"></span></span>
+            <button type="button" class="logout" id="logout">Log Out</button>
+        </div>
    </header>
 
-  <p class="sub">Add a note, tick it when it is done.</p>
+    <p class="sub">Add a note, tick it when it is done.</p>
   
-  <p class="sub" id="count"></p>
-  
-  <form id="form">
-    <input type="text" id="title" placeholder="Title" required maxlength="120">
-    <textarea id="body" placeholder="Details (optional)"></textarea>
-    <button class="submit" id="submit" type="submit">Submit</button>
-    <p class="msg" id="msg"></p>
-  </form>
+    <p class="sub" id="count"></p>
+    
+    <form id="form">
+        <input type="text" id="title" placeholder="Title" required maxlength="120">
+        <textarea id="body" placeholder="Details (optional)"></textarea>
+        <button class="submit" id="submit" type="submit">Submit</button>
+        <p class="msg" id="msg"></p>
+    </form>
 
-  <div id="list"></div>
+    <div id="list"></div>
 
   </section>
   
@@ -326,7 +330,7 @@ PAGE = """<!doctype html>
         <button class="signup" id="signups" type="button">Sign Up</button>
         <p class="msg" id="msg-error"></p>
     </form>
-</section>
+  </section>
 
 </main>
 
@@ -358,8 +362,8 @@ PAGE = """<!doctype html>
   function setBusy(busy) { loginEl.disabled = busy; signupEl.disabled = busy; loginEl.textContent = busy ? "Please wait…" : "Log In"; }
     
       
-    // Like fetch, but gives up after `ms` milliseconds (default 15 s).
-    async function fetchTimeout(url, options = {}, ms = 15000) {
+    // Like fetch, but gives up after `ms` milliseconds (default 30 s).
+    async function fetchTimeout(url, options = {}, ms = 30000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), ms);
         try {
@@ -405,7 +409,6 @@ PAGE = """<!doctype html>
                 showAuthError(res.status === 401 ? "Invalid email or password" : "Login failed. Try again.");
                 return;
             }
-
             const data = await res.json();
             token = data.access_token;
             try { localStorage.setItem("token", token); } catch (e) {}
@@ -455,7 +458,7 @@ PAGE = """<!doctype html>
     }
 
     
-    // Like fetch, but adds the login token. On a 401, go back to the login card. Waits for a maximum of 15 seconds before giving up.
+    // Like fetch, but adds the login token. On a 401, go back to the login card. Waits for a maximum of 30 seconds before giving up.
     async function api(path, options = {}) {
         const headers = { ...(options.headers || {}), Authorization: "Bearer " + token };
         const res = await fetchTimeout(path, { ...options, headers });
@@ -517,7 +520,7 @@ PAGE = """<!doctype html>
         } else {
             for (const n of notes) listEl.appendChild(drawNote(n));
             }
-        updateDoneCount();  // Update the done count before drawing notes
+        updateDoneCount();  // Update the done count after drawing notes
     }
 
     // Build one note card. textContent keeps user text safe (never run as HTML).
@@ -545,14 +548,13 @@ PAGE = """<!doctype html>
         const del = document.createElement("button");
         del.className = "del";
         del.textContent = "Delete";
-        del.addEventListener("click", () => removeNote(n.id));
+        del.addEventListener("click", async () => { del.disabled = true; await removeNote(n.id); del.disabled = false; });
 
         //add edit button to each note card 
         const edit = document.createElement("button");
         edit.className = "edit";
         edit.textContent = "Edit";
         edit.addEventListener("click", () => startEdit(card, n));
-
         card.append(box, text, edit, del);          // edit button goes before del
         return card;
     }
@@ -574,23 +576,30 @@ PAGE = """<!doctype html>
         save.className = "submit";
         save.textContent = "Save";
 
-        // Save button: send the changes to the API, then redraw the note card.
-        const err = document.createElement("p");          // a message line inside this card
+        // A message line inside this card
+        const err = document.createElement("p");          
         err.className = "msg";
-
+            
+        // Save button: send the changes to the API, then redraw the note card.
         save.addEventListener("click", async () => {
-        const title = titleIn.value.trim();
-        if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
-        err.textContent = "";
-        save.disabled = true;
-        const res = await api("/notes/" + n.id, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
+            const title = titleIn.value.trim();
+            if (!title) { err.textContent = "Title cannot be empty."; titleIn.focus(); return; }
+            err.textContent = "";
+            save.disabled = true;
+            try {
+            const res = await api("/notes/" + n.id, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: title, body: bodyIn.value.trim(), done: n.done }),
+            });
+            if (!res.ok) { err.textContent = "Could not save changes."; return; }
+            await loadNotes();
+            } catch (e) {
+                err.textContent = netMessage(e);
+            } finally {
+                save.disabled = false;
+            }
         });
-        if (!res.ok) { err.textContent = "Could not save changes."; save.disabled = false; return; }
-        await loadNotes();
-        }); 
 
         // Cancel Button: replace the form with the original note card.
         const cancel = document.createElement("button");
@@ -606,30 +615,30 @@ PAGE = """<!doctype html>
         titleIn.focus();
     }
 
-  // The Submit button: send the form to the API as a new note.
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();            // stop the browser reloading the page
-    showError("");
-    submitEl.disabled = true;
-    try {
-      const res = await api("/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: titleEl.value.trim(), body: bodyEl.value.trim(), done: false }),
-      });
-      if (!res.ok) throw new Error("Could not save the note.");
-      form.reset();
-      titleEl.focus();
-      await loadNotes();
-    } catch (err) {
-      showError(err.message);
-    } finally {
-      submitEl.disabled = false;
-    }
-  });
+    // The Submit button: send the form to the API as a new note.
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();            // stop the browser reloading the page
+        showError("");
+        submitEl.disabled = true;
+        try {
+            const res = await api("/notes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: titleEl.value.trim(), body: bodyEl.value.trim(), done: false }),
+            });
+            if (!res.ok) { showError("Could not save the note."); return; }
+            form.reset();
+            titleEl.focus();
+            await loadNotes();
+        } catch (err) {
+            showError(netMessage(err));
+        } finally {
+            submitEl.disabled = false;
+        }
+    });
 
 
-  // Toggle the done state of a note. Update the local copy, the card's appearance, and the server.
+    // Toggle the done state of a note. Update the local copy, the card's appearance, and the server.
     async function toggleDone(n, done, card) {
         showError("");                                   // clear any old message
         n.done = done;                                   // update the new note done state in memory
@@ -647,13 +656,20 @@ PAGE = """<!doctype html>
         await loadNotes();                       // failure: redraw from the server's truth
     }
 
+    // Delete a note by its id, then reload the notes list.
     async function removeNote(id) {
-        const res = await api("/notes/" + id, { method: "DELETE" });
-        if (!res.ok) showError("Could not delete the note.");
-        await loadNotes();
+        try {
+            const res = await api("/notes/" + id, { method: "DELETE" });
+            if (!res.ok) showError("Could not delete the note.");
+            await loadNotes();
+        } catch (err) {
+            showError(netMessage(err));
+            msgEl.scrollIntoView({ block: "nearest", behavior: "smooth" });   // bring the message into view
+        } 
     }
 
-  init();  // check for a token and load the notes if it is valid
+    // check for a token and load the notes if it is valid
+    init();  
 
 </script>
 </body>
