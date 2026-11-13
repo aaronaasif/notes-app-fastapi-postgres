@@ -262,7 +262,7 @@ PAGE = """<!doctype html>
   .note input[type=checkbox] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); }
   .note h3 { margin: 0; font-size: 17px; line-height: 1.35; }
   .note p { margin: 4px 0 0; color: var(--muted); font-size: 15px; white-space: pre-wrap; }
-  .note .msg { color: var(--danger); margin: 0; font-size: 14px; }
+  .note .msg { color: var(--danger); margin: 0; font-size: 14px; grid-column: 1 / -1; }
   .note { border-left: 4px solid var(--accent); }                /* active note: accent edge */
   .note.done { opacity: .65; border-left-color: var(--line); }   /* done note: quiet edge */
   .note.done h3 { text-decoration: line-through; color: var(--muted); }
@@ -335,31 +335,45 @@ PAGE = """<!doctype html>
 </main>
 
 <script>
-  const authForm = document.getElementById("auth-form");
-  const emailEl  = document.getElementById("email");
-  const passEl   = document.getElementById("password");
-  const form = document.getElementById("form");
-  const titleEl = document.getElementById("title");
-  const bodyEl = document.getElementById("body");
-  const submitEl = document.getElementById("submit");
-  const msgEl = document.getElementById("msg");
-  const listEl = document.getElementById("list");
-  const countEl = document.getElementById("count");
-  const authEl = document.getElementById("auth");
-  const appEl = document.getElementById("app");
-  const msgErrorEl = document.getElementById("msg-error");
-  const whoEl = document.getElementById("who");
-  const logoutEl = document.getElementById("logout");
-  const signupEl = document.getElementById("signups");
-  const loginEl = document.getElementById("login");
+    const authForm = document.getElementById("auth-form");
+    const emailEl  = document.getElementById("email");
+    const passEl   = document.getElementById("password");
+    const form = document.getElementById("form");
+    const titleEl = document.getElementById("title");
+    const bodyEl = document.getElementById("body");
+    const submitEl = document.getElementById("submit");
+    const msgEl = document.getElementById("msg");
+    const listEl = document.getElementById("list");
+    const countEl = document.getElementById("count");
+    const authEl = document.getElementById("auth");
+    const appEl = document.getElementById("app");
+    const msgErrorEl = document.getElementById("msg-error");
+    const whoEl = document.getElementById("who");
+    const logoutEl = document.getElementById("logout");
+    const signupEl = document.getElementById("signups");
+    const loginEl = document.getElementById("login");
 
 
-  function showAuth() { authEl.hidden = false; appEl.hidden = true; }
-  function showApp()  { authEl.hidden = true;  appEl.hidden = false; }
-  function showError(text) { msgEl.textContent = text || ""; }
-  function showAuthError(text) { msgErrorEl.classList.remove("ok"); msgErrorEl.textContent = text || ""; }
-  function showAuthNotice(text) { msgErrorEl.classList.add("ok"); msgErrorEl.textContent = text || ""; }
-  function setBusy(busy) { loginEl.disabled = busy; signupEl.disabled = busy; loginEl.textContent = busy ? "Please wait…" : "Log In"; }
+    function showAuth() { authEl.hidden = false; appEl.hidden = true; }
+    function showApp()  { authEl.hidden = true;  appEl.hidden = false; }
+    function showError(text) { msgEl.textContent = text || ""; }
+    // Show a message inside one note card (creates the line the first time).
+    function showCardError(card, text) {
+        let m = card.querySelector(".msg");
+        if (!m) {
+            m = document.createElement("p");
+            m.className = "msg";
+            card.appendChild(m);
+        }
+        m.textContent = text || "";
+    }
+    function showAuthError(text) { msgErrorEl.classList.remove("ok"); msgErrorEl.textContent = text || ""; }
+    function showAuthNotice(text) { msgErrorEl.classList.add("ok"); msgErrorEl.textContent = text || ""; }
+    function setBusy(busy) { 
+        loginEl.disabled = busy; 
+        signupEl.disabled = busy; 
+        loginEl.textContent = busy ? "Please wait…" : "Log In"; 
+    }
     
       
     // Like fetch, but gives up after `ms` milliseconds (default 30 s).
@@ -499,10 +513,10 @@ PAGE = """<!doctype html>
     
     // Function to update the done count based on the current notes in the list
     function updateDoneCount() {
-    const total = listEl.querySelectorAll(".note").length;
-    const done  = listEl.querySelectorAll(".note.done").length;
-    countEl.textContent = total ? `${done} of ${total} done` : "";
-}
+        const total = listEl.querySelectorAll(".note").length;
+        const done  = listEl.querySelectorAll(".note.done").length;
+        countEl.textContent = total ? `${done} of ${total} done` : "";
+    }
 
     // Ask the API for all notes and draw them.
     async function loadNotes() {
@@ -548,7 +562,7 @@ PAGE = """<!doctype html>
         const del = document.createElement("button");
         del.className = "del";
         del.textContent = "Delete";
-        del.addEventListener("click", async () => { del.disabled = true; await removeNote(n.id); del.disabled = false; });
+        del.addEventListener("click", async () => { del.disabled = true; await removeNote(n.id, card); del.disabled = false; });
 
         //add edit button to each note card 
         const edit = document.createElement("button");
@@ -657,14 +671,14 @@ PAGE = """<!doctype html>
     }
 
     // Delete a note by its id, then reload the notes list.
-    async function removeNote(id) {
+    async function removeNote(id,card) {
+        showCardError(card, "");                    // clear an old message
         try {
             const res = await api("/notes/" + id, { method: "DELETE" });
             if (!res.ok) showError("Could not delete the note.");
             await loadNotes();
         } catch (err) {
-            showError(netMessage(err));
-            msgEl.scrollIntoView({ block: "nearest", behavior: "smooth" });   // bring the message into view
+            showCardError(card, netMessage(err));
         } 
     }
 
