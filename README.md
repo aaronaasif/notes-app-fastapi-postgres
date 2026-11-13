@@ -94,10 +94,12 @@ Never commit real values. Keep them in your shell or in a file outside the repos
 
 ## Screenshots
 
-![Login screen iPhone](screenshots/login_iphone.jpg)
-![Notes page iPhone](screenshots/notes_iphone.jpg)
-![Login screen Android](screenshots/login_android.jpg)
-![Notes page Android](screenshots/notes_android.jpg)
+<p>
+  <img src="screenshots/login_iphone.jpg" alt="Login screen on iPhone" width="200">
+  <img src="screenshots/notes_iphone.jpg" alt="Notes page on iPhone" width="200">
+  <img src="screenshots/login_android.jpg" alt="Login screen on Android" width="200">
+  <img src="screenshots/notes_android.jpg" alt="Notes page on Android" width="200">
+</p>
 
 ## Roadmap
 
