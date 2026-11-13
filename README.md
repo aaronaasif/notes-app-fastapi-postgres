@@ -1,4 +1,4 @@
-# Notes App (FastAPI + PostgreSQL)
+﻿# Notes App (FastAPI + PostgreSQL)
 
 A small full-stack notes app with user accounts. Each user signs up, logs in, and manages a private list of notes: add, edit, tick as done, delete.
 
@@ -94,9 +94,10 @@ Never commit real values. Keep them in your shell or in a file outside the repos
 
 ## Screenshots
 
-<!-- Keep your existing screenshot lines here, for example: -->
-<!-- ![Login](screenshots/login.jpg) -->
-<!-- ![Notes](screenshots/notes.jpg) -->
+![Login screen iPhone](screenshots/login_iphone.jpg)
+![Notes page iPhone](screenshots/notes_iphone.jpg)
+![Login screen Android](screenshots/login_android.jpg)
+![Notes page Android](screenshots/notes_android.jpg)
 
 ## Roadmap
 
